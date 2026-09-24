@@ -384,7 +384,10 @@ impl Display for RecordValue {
 
 #[inline]
 fn serialize_integer(value: i64, min: i64, max: i64, buffer: &mut ByteStreamWriteBuffer) {
-    let uint = (value - min) as u64;
+    // Use wrapping subtraction to support the full i64 range
+    // (e.g. min = i64::MIN and max = i64::MAX) without overflow.
+    // The reader side uses the matching wrapping_add() to undo this.
+    let uint = value.wrapping_sub(min) as u64;
     let data = uint.to_le_bytes();
     let bits = integer_bits(min, max);
     buffer.add_bits(&data, bits);
