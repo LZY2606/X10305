@@ -24,6 +24,9 @@ crc32c = ["dep:crc32c"]
 roxmltree = "0.21"
 crc32c = { version = "0.6", optional = true }
 
+[dev-dependencies]
+roxmltree = "0.21"
+
 [workspace]
 members = [
     "tools/e57-check-crc",

@@ -384,7 +384,10 @@ impl Display for RecordValue {
 
 #[inline]
 fn serialize_integer(value: i64, min: i64, max: i64, buffer: &mut ByteStreamWriteBuffer) {
-    let uint = (value - min) as u64;
+    // Use wrapping subtraction to support the full i64 range from i64::MIN to i64::MAX.
+    // The result modulo 2^64 is exactly the offset we want to store.
+    // The reader side reconstructs the value with the matching wrapping_add() in bitpack.rs.
+    let uint = value.wrapping_sub(min) as u64;
     let data = uint.to_le_bytes();
     let bits = integer_bits(min, max);
     buffer.add_bits(&data, bits);
@@ -594,4 +597,84 @@ impl Record {
         name: RecordName::Intensity,
         data_type: RecordDataType::UNIT_F32,
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bitpack::BitPack;
+    use crate::bs_read::ByteStreamReadBuffer;
+    use std::collections::VecDeque;
+    use std::error::Error as StdError;
+
+    type TestResult = std::result::Result<(), Box<dyn StdError>>;
+
+    fn integer_roundtrip(data_type: &RecordDataType, values: &[i64]) -> TestResult {
+        assert_eq!(data_type.bit_size(), 64);
+        let mut buffer = ByteStreamWriteBuffer::new();
+        for value in values {
+            let record_value = match data_type {
+                RecordDataType::Integer { .. } => RecordValue::Integer(*value),
+                _ => RecordValue::ScaledInteger(*value),
+            };
+            data_type.write(&record_value, &mut buffer)?;
+        }
+        let bytes = buffer.get_all_bytes();
+        assert_eq!(bytes.len(), values.len() * 8);
+        let mut stream = ByteStreamReadBuffer::new();
+        stream.append_from_reader(&mut bytes.as_slice(), bytes.len())?;
+        let (min, max) = match data_type {
+            RecordDataType::Integer { min, max } => (*min, *max),
+            RecordDataType::ScaledInteger { min, max, .. } => (*min, *max),
+            _ => return Err("unexpected data type".into()),
+        };
+        let mut output = VecDeque::new();
+        match data_type {
+            RecordDataType::Integer { .. } => {
+                BitPack::unpack_ints(&mut stream, min, max, &mut output)?
+            }
+            _ => BitPack::unpack_scaled_ints(&mut stream, min, max, &mut output)?,
+        }
+        let restored: Vec<i64> = output
+            .into_iter()
+            .map(|v| match v {
+                RecordValue::Integer(i) | RecordValue::ScaledInteger(i) => Ok(i),
+                other => Err(format!("unexpected record value {other:?}").into()),
+            })
+            .collect::<std::result::Result<Vec<i64>, Box<dyn StdError>>>()?;
+        assert_eq!(restored, values);
+        Ok(())
+    }
+
+    #[test]
+    fn extreme_integer_full_range_roundtrip() -> TestResult {
+        integer_roundtrip(
+            &RecordDataType::Integer {
+                min: i64::MIN,
+                max: i64::MAX,
+            },
+            &[
+                i64::MIN,
+                i64::MIN + 1,
+                -1,
+                0,
+                1,
+                i64::MAX - 1,
+                i64::MAX,
+            ],
+        )
+    }
+
+    #[test]
+    fn extreme_scaled_integer_full_range_roundtrip() -> TestResult {
+        integer_roundtrip(
+            &RecordDataType::ScaledInteger {
+                min: i64::MIN,
+                max: i64::MAX,
+                scale: 0.5,
+                offset: -1.0,
+            },
+            &[i64::MIN, 0, i64::MAX],
+        )
+    }
 }
