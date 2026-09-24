@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+- Fixed debug-build overflow panic when writing integer records with the full i64 range (i64::MIN to i64::MAX)
+- Made the parser byte budget for the XML section publicly available as `MAX_XML_SIZE` constant
+- Added new `e57-fixture` tool that generates tiny deterministic E57 fixtures from a fixed seed
+  and verifies the round-trip of XML, binary sections, compressed vector data and checksums,
+  including the rejection of locally corrupted files
+
 ## [0.11.13] - 2026-06-17
 
 - Improved error messages (thx @chpatrick and @nh2)

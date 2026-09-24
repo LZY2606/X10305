@@ -42,6 +42,7 @@ They are intended as example code that explains how to use the library,
 but also as a set of usefuls tools when working with E57 files:
 
 * `e57-check-crc` to validate all the CRC32 checksums in an E57 file. This helps to detect corrupt files upfront before evaluating the actual content of the file.
+* `e57-fixture` to generate tiny deterministic E57 fixtures from a fixed seed and to verify the round-trip of XML, binary sections, compressed vector data and checksums, including the handling of locally corrupted files.
 * `e57-extract-scan-info` to extract some metadata for all scans/point clouds into a CSV file.
 * `e57-extract-xml` to quickly extract the XML document that contains all the metadata of the E57 file.
 * `e57-from-xyz` to generate a E57 file from a unstructured XYZ ASCII point cloud file.

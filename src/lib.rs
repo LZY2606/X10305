@@ -62,6 +62,7 @@ pub use self::bounds::IndexBounds;
 pub use self::bounds::SphericalBounds;
 pub use self::date_time::DateTime;
 pub use self::e57_reader::E57Reader;
+pub use self::e57_reader::MAX_XML_SIZE;
 pub use self::e57_writer::E57Writer;
 pub use self::error::Error;
 pub use self::error::Result;

@@ -20,7 +20,10 @@ use std::io::Seek;
 use std::io::Write;
 use std::path::Path;
 
-const MAX_XML_SIZE: usize = 1024 * 1024 * 50;
+/// Maximum size of the XML section in bytes that the parser will accept.
+/// Larger XML sections are rejected with a `NotImplemented` error.
+/// This is the byte budget of the parser and can be used for diagnostics.
+pub const MAX_XML_SIZE: usize = 1024 * 1024 * 50;
 
 /// Main interface for reading E57 files.
 pub struct E57Reader<T: Read + Seek> {

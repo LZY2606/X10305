@@ -20,6 +20,9 @@ include = [
 [features]
 crc32c = ["dep:crc32c"]
 
+[dev-dependencies]
+e57-fixture = { path = "tools/e57-fixture" }
+
 [dependencies]
 roxmltree = "0.21"
 crc32c = { version = "0.6", optional = true }
@@ -27,6 +30,7 @@ crc32c = { version = "0.6", optional = true }
 [workspace]
 members = [
     "tools/e57-check-crc",
+    "tools/e57-fixture",
     "tools/e57-extract-scan-info",
     "tools/e57-extract-xml",
     "tools/e57-from-xyz",
