@@ -1,4 +1,8 @@
 use crate::error::Converter;
+use crate::budget::charge_xml_depth;
+use crate::budget::BudgetTracker;
+use crate::budget::BudgetUsage;
+use crate::budget::ParseBudget;
 use crate::paged_reader::PagedReader;
 use crate::root::root_from_document;
 use crate::root::Root;
@@ -31,26 +35,47 @@ pub struct E57Reader<T: Read + Seek> {
     pointclouds: Vec<PointCloud>,
     images: Vec<Image>,
     extensions: Vec<Extension>,
+    budget: BudgetTracker,
 }
 
 impl<T: Read + Seek> E57Reader<T> {
     /// Creates a new E57 instance for from a reader.
     pub fn new(mut reader: T) -> Result<Self> {
+        Self::build(reader, ParseBudget::default())
+    }
+
+    /// Creates a new E57 instance that enforces the supplied resource budget.
+    ///
+    /// The budget limits the number of bytes consumed from the input, the
+    /// number of point records that can be decoded and the nesting depth of
+    /// the XML section. Counter snapshots are available via
+    /// [`E57Reader::budget_usage`] and are included in budget failure reports.
+    pub fn with_budget(reader: T, budget: ParseBudget) -> Result<Self> {
+        Self::build(reader, budget)
+    }
+
+    fn build(mut reader: T, budget_config: ParseBudget) -> Result<Self> {
+        let mut budget = BudgetTracker::new(budget_config);
+
         // Read, parse and validate E57 header
         let header = Header::read(&mut reader)?;
+        budget.charge_bytes(48, "E57 file header")?;
 
         // Set up paged reader for the CRC page layer
         let mut reader = PagedReader::new(reader, header.page_size)
             .read_err("Failed creating paged CRC reader")?;
+        budget.charge_bytes(reader.physical_size(), "E57 file size")?;
 
         // Read and parse XML data
         let xml_raw = Self::extract_xml(
             &mut reader,
             header.phys_xml_offset,
             header.xml_length as usize,
+            &mut budget,
         )?;
         let xml = String::from_utf8(xml_raw).read_err("Failed to parse XML as UTF8")?;
         let document = Document::parse(&xml).invalid_err("Failed to parse XML data")?;
+        charge_xml_depth(&mut budget, &document.root())?;
         let root = root_from_document(&document)?;
         let pointclouds = PointCloud::vec_from_document(&document)?;
         let images = Image::vec_from_document(&document)?;
@@ -64,12 +89,23 @@ impl<T: Read + Seek> E57Reader<T> {
             pointclouds,
             images,
             extensions,
+            budget,
         })
     }
 
     /// Returns the contents of E57 binary file header structure.
     pub fn header(&self) -> Header {
         self.header.clone()
+    }
+
+    /// Returns the configured parser budget.
+    pub fn budget(&self) -> ParseBudget {
+        self.budget.limits()
+    }
+
+    /// Returns a snapshot of the parser budget counters consumed so far.
+    pub fn budget_usage(&self) -> BudgetUsage {
+        self.budget.usage()
     }
 
     /// Returns the XML section of the E57 file.
@@ -106,7 +142,7 @@ impl<T: Read + Seek> E57Reader<T> {
     /// The data provided by this interface is already normalized for convenience.
     /// There is also a raw iterator for advanced use-cases that require direct access.
     pub fn pointcloud_simple(&mut self, pc: &PointCloud) -> Result<PointCloudReaderSimple<'_, T>> {
-        PointCloudReaderSimple::new(pc, &mut self.reader)
+        PointCloudReaderSimple::new(pc, &mut self.reader, &mut self.budget)
     }
 
     /// Returns an iterator for reading raw low level point cloud data.
@@ -114,7 +150,7 @@ impl<T: Read + Seek> E57Reader<T> {
     /// This interface is only recommended for advanced use-cases.
     /// In most scenarios the simple iterator is the better choice.
     pub fn pointcloud_raw(&mut self, pc: &PointCloud) -> Result<PointCloudReaderRaw<'_, T>> {
-        PointCloudReaderRaw::new(pc, &mut self.reader)
+        PointCloudReaderRaw::new(pc, &mut self.reader, &mut self.budget)
     }
 
     /// Returns a list of all image descriptors in the file.
@@ -196,7 +232,12 @@ impl<T: Read + Seek> E57Reader<T> {
         Ok(u64::from_le_bytes(buf))
     }
 
-    fn extract_xml(reader: &mut PagedReader<T>, offset: u64, length: usize) -> Result<Vec<u8>> {
+    fn extract_xml(
+        reader: &mut PagedReader<T>,
+        offset: u64,
+        length: usize,
+        budget: &mut BudgetTracker,
+    ) -> Result<Vec<u8>> {
         if length > MAX_XML_SIZE {
             Error::not_implemented(format!(
                 "XML sections larger than {MAX_XML_SIZE} bytes are not supported"
@@ -209,6 +250,7 @@ impl<T: Read + Seek> E57Reader<T> {
         reader.read_exact(&mut xml).read_err(format!(
             "File appears to be truncated: cannot read {length} bytes of XML data"
         ))?;
+        budget.charge_bytes(length as u64, &format!("XML section at offset {offset}"))?;
         Ok(xml)
     }
 }

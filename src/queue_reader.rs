@@ -1,4 +1,5 @@
 use crate::bitpack::BitPack;
+use crate::budget::BudgetTracker;
 use crate::bs_read::ByteStreamReadBuffer;
 use crate::cv_section::CompressedVectorSectionHeader;
 use crate::error::Converter;
@@ -20,17 +21,49 @@ pub struct QueueReader<'a, T: Read + Seek> {
     buffer_sizes: Vec<usize>,
     byte_streams: Vec<ByteStreamReadBuffer>,
     queues: Vec<VecDeque<RecordValue>>,
+    budget: &'a mut BudgetTracker,
+    last_logical_pos: u64,
 }
 
 impl<'a, T: Read + Seek> QueueReader<'a, T> {
-    pub fn new(pc: &PointCloud, reader: &'a mut PagedReader<T>) -> Result<Self> {
+    pub fn new(
+        pc: &PointCloud,
+        reader: &'a mut PagedReader<T>,
+        budget: &'a mut BudgetTracker,
+    ) -> Result<Self> {
         reader
             .seek_physical(pc.file_offset)
             .read_err("Cannot seek to compressed vector header")?;
+        let logical_pos = reader.logical_position();
+        budget.charge_bytes(
+            logical_pos,
+            &format!(
+                "seek to compressed vector of point cloud '{}'",
+                pc_label(pc)
+            ),
+        )?;
         let section_header = CompressedVectorSectionHeader::read(reader)?;
+        budget.charge_bytes(
+            CompressedVectorSectionHeader::SIZE,
+            &format!(
+                "compressed vector section header of point cloud '{}'",
+                pc_label(pc)
+            ),
+        )?;
         reader
             .seek_physical(section_header.data_offset)
             .read_err("Cannot seek to packet header")?;
+        let logical_pos = reader.logical_position();
+        let charged = logical_pos.saturating_sub(budget.usage().bytes);
+        if charged > 0 {
+            budget.charge_bytes(
+                charged,
+                &format!(
+                    "seek to packet data of point cloud '{}'",
+                    pc_label(pc)
+                ),
+            )?;
+        }
 
         Ok(Self {
             pc: pc.clone(),
@@ -38,7 +71,25 @@ impl<'a, T: Read + Seek> QueueReader<'a, T> {
             buffer_sizes: vec![0; pc.prototype.len()],
             byte_streams: vec![ByteStreamReadBuffer::new(); pc.prototype.len()],
             queues: vec![VecDeque::new(); pc.prototype.len()],
+            budget,
+            last_logical_pos: logical_pos,
         })
+    }
+
+    fn charge_read(&mut self) -> Result<()> {
+        let logical_pos = self.reader.logical_position();
+        if logical_pos > self.last_logical_pos {
+            let amount = logical_pos - self.last_logical_pos;
+            self.last_logical_pos = logical_pos;
+            self.budget.charge_bytes(
+                amount,
+                &format!(
+                    "compressed vector packet data of point cloud '{}'",
+                    pc_label(&self.pc)
+                ),
+            )?;
+        }
+        Ok(())
     }
 
     /// Returns the number of complete and available points across all queues.
@@ -60,6 +111,11 @@ impl<'a, T: Read + Seek> QueueReader<'a, T> {
     /// Return values for the next point by popping one value from each queue.
     /// Use an existing vector with enough capacity to avoid frequent reallocations!
     pub fn pop_point(&mut self, output: &mut RawValues) -> Result<()> {
+        self.budget.charge_record(&format!(
+            "point record {} of point cloud '{}'",
+            self.budget.usage().records + 1,
+            pc_label(&self.pc)
+        ))?;
         output.clear();
         for i in 0..self.pc.prototype.len() {
             let value = self.queues[i]

@@ -26,6 +26,7 @@
 mod bitpack;
 mod blob;
 mod bounds;
+mod budget;
 mod bs_read;
 mod bs_write;
 mod cv_section;
@@ -60,6 +61,10 @@ pub use self::blob::Blob;
 pub use self::bounds::CartesianBounds;
 pub use self::bounds::IndexBounds;
 pub use self::bounds::SphericalBounds;
+pub use self::budget::BudgetKind;
+pub use self::budget::BudgetUsage;
+pub use self::budget::ParseBudget;
+pub use self::budget::DEFAULT_MAX_RECURSION;
 pub use self::date_time::DateTime;
 pub use self::e57_reader::E57Reader;
 pub use self::e57_writer::E57Writer;

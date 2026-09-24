@@ -85,6 +85,16 @@ impl<T: Read + Seek> PagedReader<T> {
         Ok(self.offset)
     }
 
+    /// Physical size of the underlying file in bytes, including per-page checksums.
+    pub fn physical_size(&self) -> u64 {
+        self.phy_file_size
+    }
+
+    /// Current logical read position (checksums excluded) inside the file.
+    pub fn logical_position(&self) -> u64 {
+        self.offset
+    }
+
     fn read_page(&mut self, page: u64) -> Result<()> {
         if page >= self.pages {
             let max = self.pages - 1;
