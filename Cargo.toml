@@ -35,4 +35,9 @@ members = [
     "tools/e57-to-pano",
     "tools/e57-to-xyz",
     "tools/e57-unpack",
+    "tools/e57-fixture-gate",
 ]
+
+[dev-dependencies]
+e57-fixture-gate = { path = "tools/e57-fixture-gate" }
+
