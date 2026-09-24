@@ -66,6 +66,15 @@ impl Error {
         })
     }
 
+    /// Creates a new Read error for a resource budget violation reported
+    /// while parsing untrusted input.
+    pub fn read_violation<T>(desc: String) -> Result<T> {
+        Err(Error::Read {
+            desc: format!("Resource budget exceeded: {desc}"),
+            source: None,
+        })
+    }
+
     /// Creates a new Internal error.
     pub fn internal<T, C>(desc: C) -> Result<T>
     where

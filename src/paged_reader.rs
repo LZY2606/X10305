@@ -1,3 +1,4 @@
+use crate::budget::{Budget, ParseLimits};
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
 #[cfg(not(feature = "crc32c"))]
@@ -17,6 +18,7 @@ pub struct PagedReader<T: Read + Seek> {
     page_num: Option<u64>,
     page_buffer: Vec<u8>,
     phy_pos: Option<u64>,
+    budget: Budget,
 
     #[cfg(not(feature = "crc32c"))]
     crc: Crc32,
@@ -24,7 +26,16 @@ pub struct PagedReader<T: Read + Seek> {
 
 impl<T: Read + Seek> PagedReader<T> {
     /// Create and initialize a paged reader that abstracts the E57 CRC scheme
-    pub fn new(mut reader: T, page_size: u64) -> Result<Self> {
+    pub fn new(reader: T, page_size: u64) -> Result<Self> {
+        Self::new_with_limits(reader, page_size, ParseLimits::default())
+    }
+
+    /// Same as [`Self::new`] but with custom resource limits enforced while reading.
+    pub(crate) fn new_with_limits(
+        mut reader: T,
+        page_size: u64,
+        limits: ParseLimits,
+    ) -> Result<Self> {
         if page_size > MAX_PAGE_SIZE {
             Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -64,10 +75,16 @@ impl<T: Read + Seek> PagedReader<T> {
             phy_pos: None,
             page_num: None,
             offset: 0,
+            budget: Budget::new(limits),
 
             #[cfg(not(feature = "crc32c"))]
             crc: Crc32::new(),
         })
+    }
+
+    /// Returns the shared resource budget used by this reader.
+    pub(crate) fn budget(&self) -> Budget {
+        self.budget.clone()
     }
 
     /// Seeking to a physical file address as offset relative to the start of the file.
@@ -175,6 +192,8 @@ impl<T: Read + Seek> Read for PagedReader<T> {
             &self.page_buffer[page_offset as usize..page_offset as usize + read_size],
         );
         self.offset += read_size as u64;
+        self.budget
+            .charge_bytes(read_size as u64, "reading point cloud data")?;
         Ok(read_size)
     }
 }
