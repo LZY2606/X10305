@@ -100,3 +100,24 @@ pub use self::transform::Translation;
 
 /// Storage container for low level point data.
 pub type RawValues = Vec<RecordValue>;
+
+/// Computes the CRC-32C checksum of a single E57 page payload.
+///
+/// This is **not** part of the stable public API and therefore `#[doc(hidden)]`.
+/// It exists so that the fixture tooling of this repository
+/// (see `tools/e57-fixture-gate`) can construct partially corrupted E57 files
+/// with valid page checksums for testing purposes.
+/// It calls the exact same checksum implementation that the paged reader
+/// and writer use in production (the SW fallback in `crc32.rs` or the
+/// optional external `crc32c` crate if the feature is enabled).
+#[doc(hidden)]
+pub fn page_checksum(page_payload: &[u8]) -> u32 {
+    #[cfg(not(feature = "crc32c"))]
+    {
+        crate::crc32::Crc32::new().calculate(page_payload)
+    }
+    #[cfg(feature = "crc32c")]
+    {
+        crc32c::crc32c(page_payload)
+    }
+}

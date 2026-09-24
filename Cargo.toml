@@ -24,8 +24,12 @@ crc32c = ["dep:crc32c"]
 roxmltree = "0.21"
 crc32c = { version = "0.6", optional = true }
 
+[dev-dependencies]
+e57-fixture-gate = { path = "tools/e57-fixture-gate" }
+
 [workspace]
 members = [
+    "tools/e57-fixture-gate",
     "tools/e57-check-crc",
     "tools/e57-extract-scan-info",
     "tools/e57-extract-xml",
