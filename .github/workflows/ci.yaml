@@ -1,0 +1,133 @@
+name: CI
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  linux_x86_64:
+    name: Linux (x86-64)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Enable Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Release Build
+        run: cargo build --release --all
+      - name: Execute Tests
+        run: cargo test --release --all
+      - name: Run Clippy
+        run: cargo clippy --release --all --all-targets --all-features --locked -- -D warnings
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+      - name: Check Docs
+        run: RUSTDOCFLAGS="-Dwarnings" cargo doc --package e57
+      - name: Remove Unwanted Artifacts
+        run: rm target/release/e57-*.d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e57-tools-linux-x86-64
+          compression-level: 9
+          path: target/release/e57-*
+  linux_arm64:
+    name: Linux (arm64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Enable Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Release Build
+        run: cargo build --release --all
+      - name: Execute Tests
+        run: cargo test --release --all
+      - name: Remove Unwanted Artifacts
+        run: rm target/release/e57-*.d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e57-tools-linux-arm64
+          compression-level: 9
+          path: target/release/e57-*
+  windows_x86_64:
+    name: Windows (x86-64)
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Enable Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Release Build
+        run: cargo build --release --all
+      - name: Execute Tests
+        run: cargo test --release --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e57-tools-windows-x86-64
+          compression-level: 9
+          path: target/release/e57-*.exe
+  windows_arm64:
+    name: Windows (arm64)
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Enable Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Release Build
+        run: cargo build --release --all
+      - name: Execute Tests
+        run: cargo test --release --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e57-tools-windows-arm64
+          compression-level: 9
+          path: target/release/e57-*.exe
+  mac_x86_64:
+    name: MacOS (x86-64)
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Install x64 target
+        run: rustup target add x86_64-apple-darwin
+      - name: Enable Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Release Build
+        run: cargo build --release --all --target x86_64-apple-darwin
+      - name: Execute Tests
+        run: cargo test --release --all --target x86_64-apple-darwin
+      - name: Remove Unwanted Artifacts
+        run: rm target/x86_64-apple-darwin/release/e57-*.d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e57-tools-macos-x86-64
+          compression-level: 9
+          path: target/x86_64-apple-darwin/release/e57-*
+  mac_arm64:
+    name: MacOS (arm64)
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Update Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Enable Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Release Build
+        run: cargo build --release --all --target aarch64-apple-darwin
+      - name: Execute Tests
+        run: cargo test --release --all --target aarch64-apple-darwin
+      - name: Remove Unwanted Artifacts
+        run: rm target/aarch64-apple-darwin/release/e57-*.d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: e57-tools-macos-arm64
+          compression-level: 9
+          path: target/aarch64-apple-darwin/release/e57-*

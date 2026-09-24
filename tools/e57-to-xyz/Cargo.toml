@@ -1,0 +1,10 @@
+[package]
+name = "e57-to-xyz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+e57 = { path = "../../", features = ["crc32c"] }
+anyhow = "1"
+ryu = "1"
